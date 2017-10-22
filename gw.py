@@ -1,6 +1,8 @@
 import logging
 import json
 import asyncio
+import os
+import hashlib
 
 import websockets
 
@@ -17,6 +19,10 @@ class OP:
     request = 4
     response = 5
     dispatch = 6
+
+
+def random_nonce():
+    return hashlib.md5(os.urandom(128)).hexdigest()
 
 
 class Connection:
@@ -98,12 +104,13 @@ class Bridge:
     def __init__(self, app, server, loop):
         self.ws = None
         self.app = app
+        app.bridge = self
         self.server = server
         self.loop = loop
 
     async def init(self):
         log.info('Starting rest-py')
-        self.ws = Connection()
+        self.ws = Connection(self)
 
         self.loop.create_task(self.server)
         self.loop.create_task(self.ws.init())

@@ -5,12 +5,16 @@ from sanic import Sanic
 from sanic import response
 
 from gw import Bridge
+
 import api.basic
+import api.users
 
 logging.basicConfig(level=logging.DEBUG)
 
 app = Sanic(__name__)
 app.blueprint(api.basic.bp)
+app.blueprint(api.users.bp)
+
 API_PREFIXES = [
     '/api/v6',
     '/api/v7'
