@@ -30,6 +30,7 @@ class Connection:
         self.parent = parent
         self.ws = None
         self.good_state = False
+        self._hb_good = True
 
         self.loop_task = None
         self.hb_task = None
@@ -43,6 +44,7 @@ class Connection:
     async def heartbeat(self, hello):
         try:
             period = hello['hb_interval'] / 1000
+            log.info('hb: %.2f', period)
             while True:
                 if not self._hb_good:
                     log.warning('We did not receive an ACK from the server.')
@@ -64,6 +66,7 @@ class Connection:
 
                 await asyncio.sleep(period)
         except asyncio.CancelledError:
+            log.exception('Cancelled')
             self.good_state = False
             pass
 
@@ -87,11 +90,13 @@ class Connection:
             log.error('Received HELLO is not HELLO.')
             return
 
+        log.info('Authenticating')
         await self.send({
             'op': OP.hello_ack,
             'password': lconfig.litebridge_password,
         })
 
+        log.info('starting tasks')
         self.loop_task = self.parent.loop.create_task(self.loop())
         self.hb_task = self.parent.loop.create_task(self.heartbeat(hello))
 

@@ -10,4 +10,5 @@ ssl_keyfile = ''
 gateway_url = 'ws://locahost:8069'
 
 # Where the litebridge connection will happen
-litebridge_server = 'ws://localhost:8696'
+litebridge_server = 'ws://localhost:8080/bridge'
+litebridge_password = '123'
