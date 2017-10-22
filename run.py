@@ -4,7 +4,7 @@ import asyncio
 from sanic import Sanic
 from sanic import response
 
-# from .bridge import Bridge
+from gw import Bridge
 import api.basic
 
 logging.basicConfig(level=logging.DEBUG)
@@ -36,10 +36,9 @@ def main():
 
     server = app.create_server(host="0.0.0.0", port=8000)
     loop = asyncio.get_event_loop()
-    # loop.create_task(Bridge().init())
-    # Websocket.init will have this line:
-    asyncio.ensure_future(server)
+    b = Bridge(app, server, loop)
     try:
+        asyncio.ensure_future(b.init())
         loop.run_forever()
     except:
         loop.stop()
