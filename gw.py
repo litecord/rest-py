@@ -72,17 +72,20 @@ class Connection:
 
     async def loop(self):
         """Enter an infinite loop receiving packets."""
-        while True:
-            payload = await self.recv()
-            opcode = payload['op']
+        try:
+            while True:
+                payload = await self.recv()
+                opcode = payload['op']
 
-            if opcode == OP.heartbeat_ack:
-                log.debug("Gateway ACK'd our heartbeat")
-                self._hb_good = True
-            elif opcode == OP.response:
-                pass
-            else:
-                log.warning('Unknown OP code %d', opcode)
+                if opcode == OP.heartbeat_ack:
+                    log.debug("Gateway ACK'd our heartbeat")
+                    self._hb_good = True
+                elif opcode == OP.response:
+                    pass
+                else:
+                    log.warning('Unknown OP code %d', opcode)
+        except:
+            log.exception('Error in main receive loop')
 
     async def ws_init(self):
         hello = await self.recv()
