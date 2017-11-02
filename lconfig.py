@@ -7,7 +7,7 @@ ssl_certfile = ''
 ssl_keyfile = ''
 
 # Where the gateway is in the world
-gateway_url = 'ws://locahost:8069'
+gateway_url = 'ws://localhost:8080/gw'
 
 # Where the litebridge connection will happen
 litebridge_server = 'ws://localhost:8080/bridge'
