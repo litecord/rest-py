@@ -3,6 +3,7 @@ import json
 import asyncio
 import os
 import hashlib
+import random
 
 import websockets
 
@@ -84,14 +85,21 @@ class Connection:
                     pass
                 else:
                     log.warning('Unknown OP code %d', opcode)
+        except websockets.ConnectionClosed as err:
+            log.info('Closed, trying a reconnect...')
+            # self.loop_task.stop()
+            await self.ws.close()
+            await self.init()
+
+            log.info('Finished')
+            return
         except:
             log.exception('Error in main receive loop')
 
     async def ws_init(self):
         hello = await self.recv()
         if hello['op'] != OP.hello:
-            log.error('Received HELLO is not HELLO.')
-            return
+            raise RuntimeError('Received HELLO is not HELLO')
 
         log.info('Authenticating')
         await self.send({
@@ -99,13 +107,21 @@ class Connection:
             'password': lconfig.litebridge_password,
         })
 
-        log.info('starting tasks')
+        log.info('firing tasks')
         self.loop_task = self.parent.loop.create_task(self.loop())
         self.hb_task = self.parent.loop.create_task(self.heartbeat(hello))
 
     async def init(self):
-        self.ws = await websockets.connect(lconfig.litebridge_server)
-        await self.ws_init()
+        try:
+            log.info('Connecting to the gateway...')
+            self.ws = await websockets.connect(lconfig.litebridge_server)
+            log.info('Initializing ws...')
+            await self.ws_init()
+        except:
+            sec = random.uniform(1, 10)
+            log.exception('Error while connecting, retrying in %.2f seconds', sec)
+            await asyncio.sleep(sec)
+            await self.init()
 
 
 class Bridge:
