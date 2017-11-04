@@ -4,10 +4,13 @@ import asyncio
 import os
 import hashlib
 import random
+import asyncpg
 
 import websockets
 
 import lconfig
+
+import utils.snowflake as snowflake
 
 log = logging.getLogger(__name__)
 
@@ -119,7 +122,8 @@ class Connection:
             await self.ws_init()
         except:
             sec = random.uniform(1, 10)
-            log.exception('Error while connecting, retrying in %.2f seconds', sec)
+            log.exception('Error while connecting, retrying in %.2f seconds',
+                          sec)
             await asyncio.sleep(sec)
             await self.init()
 
@@ -128,14 +132,57 @@ class Bridge:
     def __init__(self, app, server, loop):
         self.ws = None
         self.app = app
+
+        # aliases to this instance
         app.bridge = self
+        app.br = self
+
         self.server = server
         self.loop = loop
 
     async def init(self):
         log.info('Starting rest-py')
         self.ws = Connection(self)
+        self.pool = await asyncpg.create_pool(**lconfig.pgargs)
 
         self.loop.create_task(self.server)
         self.loop.create_task(self.ws.init())
         log.info('Finished.')
+
+    async def get_user(self, user_id):
+        stmt = await self.pool.query("""
+        SELECT * FROM USERS
+        WHERE id=$1
+        """, user_id)
+
+        return await stmt.fetchrow()
+
+    async def generate_discrim(self, username: str) -> str:
+        """Generate a discriminator based on a username."""
+        # First, get amount of users
+
+        count = await self.pool.query("""
+        SELECT COUNT(user_id) FROM users WHERE username = $1
+        """, username)
+
+        if count >= 9999:
+            # Dropping it because we already have too much
+            raise Exception('Too many users have this username')
+
+        # Check if random discrim is already used
+        # and if it is already used, generate another one
+
+    async def create_user(self, payload):
+        # create a snowflake
+        user_id = snowflake.get_snowflake()
+        discrim = await self.generate_discrim(payload['username'])
+
+        # generate passwords
+        salt = ''
+        pwd_hash = ''
+
+        return await self.pool.query("""
+        INSERT INTO users (id, username, discriminator)
+        VALUES ($1, $2, $3)
+        """, str(user_id), payload['username'], discrim)
+
