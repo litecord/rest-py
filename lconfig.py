@@ -12,3 +12,10 @@ gateway_url = 'ws://localhost:8080/gw'
 # Where the litebridge connection will happen
 litebridge_server = 'ws://localhost:8080/bridge'
 litebridge_password = '123'
+
+# Postgres arguments
+pgargs = {
+    'user': 'litecord',
+    'password': '123',
+    'database': 'litecord',
+}

@@ -11,6 +11,7 @@ import websockets
 import lconfig
 
 import utils.snowflake as snowflake
+import utils.password as password
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class Connection:
 
         self.loop_task = None
         self.hb_task = None
+        self._retries = 0
 
     async def recv(self):
         return json.loads(await self.ws.recv())
@@ -116,15 +118,22 @@ class Connection:
 
     async def init(self):
         try:
-            log.info('Connecting to the gateway...')
+            self._retries += 1
+
+            if self._retries > 5:
+                log.warning('Retried a connection 5 times, too much.')
+                return
+
+            log.info('Connecting to the gateway [try: %d]...', self._retries)
             self.ws = await websockets.connect(lconfig.litebridge_server)
-            log.info('Initializing ws...')
             await self.ws_init()
         except:
             sec = random.uniform(1, 10)
             log.exception('Error while connecting, retrying in %.2f seconds',
                           sec)
             await asyncio.sleep(sec)
+
+            # recursion am i right
             await self.init()
 
 
@@ -150,39 +159,67 @@ class Bridge:
         log.info('Finished.')
 
     async def get_user(self, user_id):
-        stmt = await self.pool.query("""
-        SELECT * FROM USERS
+        user = await self.pool.fetchrow("""
+        SELECT * FROM users
         WHERE id=$1
         """, user_id)
 
-        return await stmt.fetchrow()
+        return user
+
+    async def get_user_by_email(self, email: str) -> dict:
+        stmt = await self.pool.fetchrow("""
+        SELECT * FROM users
+        WHERE email=$1
+        """, email)
+
+        log.info('[user:by_email] %s -> %r', email, stmt)
+        return stmt
 
     async def generate_discrim(self, username: str) -> str:
         """Generate a discriminator based on a username."""
         # First, get amount of users
 
-        count = await self.pool.query("""
-        SELECT COUNT(user_id) FROM users WHERE username = $1
+        discrims = await self.pool.fetch("""
+        SELECT (discriminator) FROM users WHERE username = $1;
         """, username)
 
-        if count >= 9999:
+        print(discrims)
+        if len(discrims) >= 9999:
             # Dropping it because we already have too much
             raise Exception('Too many users have this username')
 
         # Check if random discrim is already used
         # and if it is already used, generate another one
+        # TODO: use SQL for this
+        rdiscrim = await password.random_digits(4)
+
+        while rdiscrim in discrims:
+            rdiscrim = await password.random_digits(4)
+
+        log.info('Generated discrim %s for %r',
+                 rdiscrim, username)
+
+        return rdiscrim
 
     async def create_user(self, payload):
         # create a snowflake
         user_id = snowflake.get_snowflake()
+        log.info('Generated snowflake %d', user_id)
+
         discrim = await self.generate_discrim(payload['username'])
 
         # generate passwords
-        salt = ''
-        pwd_hash = ''
+        salt = password.get_random_salt()
+        pwd_hash = password.pwd_hash(payload['password'],
+                                     salt)
 
-        return await self.pool.query("""
-        INSERT INTO users (id, username, discriminator)
-        VALUES ($1, $2, $3)
-        """, str(user_id), payload['username'], discrim)
+        res = await self.pool.execute("""
+        INSERT INTO users (id, username, discriminator,
+        email, password_salt, password_hash)
 
+        VALUES ($1, $2, $3, $4, $5, $6)
+        """, str(user_id), payload['username'], discrim,
+                                     payload['email'], salt, pwd_hash)
+
+        _, _, rows = res.split()
+        return int(rows)

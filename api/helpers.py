@@ -1,4 +1,4 @@
-
+import itsdangerous
 from sanic import response
 from sanic.exceptions import ServerError
 
@@ -23,8 +23,16 @@ async def authorize(request):
     pass
 
 
+def route(handler):
+    async def new_handler(request, *args, **kwargs):
+        br = request.app.bridge
+        return await handler(br, request, *args, **kwargs)
+
+    return new_handler
+
+
 def auth_route(handler):
-    async def new_handler(request, *args):
+    async def new_handler(request, *args, **kwargs):
         br = request.app.bridge
         token = get_token(request)
         if not token:
@@ -47,6 +55,6 @@ def auth_route(handler):
                 'message': 'User not found [user]'
             }, status=401)
 
-        return await handler(user, br, request, *args)
+        return await handler(user, br, request, *args, **kwargs)
 
     return new_handler

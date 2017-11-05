@@ -2,3 +2,5 @@ sanic==0.6.0
 websockets==3.3
 asyncpg==0.13.0
 pysha3==1.0.2
+voluptuous==0.10.5
+itsdangerous==0.24

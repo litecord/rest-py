@@ -8,12 +8,14 @@ from gw import Bridge
 
 import api.basic
 import api.users
+import api.auth
 
 logging.basicConfig(level=logging.DEBUG)
 
 app = Sanic(__name__)
 app.blueprint(api.basic.bp)
 app.blueprint(api.users.bp)
+app.blueprint(api.auth.bp)
 
 API_PREFIXES = [
     '/api/v6',
