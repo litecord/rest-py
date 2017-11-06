@@ -110,7 +110,12 @@ class Connection:
             nonce = payload['n']
             handler = getattr(self, f'req_{rtype.lower()}', None)
             if handler:
-                await handler(nonce, *rargs)
+                result = await handler(nonce, *rargs)
+                await self.send({
+                    'op': OP.response,
+                    'r': result,
+                    'n': nonce
+                })
             else:
                 log.warning('Unknown request: %s', rtype)
 
@@ -126,32 +131,19 @@ class Connection:
 
     async def req_token_validate(self, nonce, token):
         encoded_uid, _, _ = token.split()
-
         uid = base64.urlsafe_b64decode(encoded_uid)
 
         user = await self.br.get_user(uid)
         if not user:
-            return await self.send({
-                'op': OP.response,
-                'r': False,
-                'n': nonce,
-            })
+            return False, 'user not found'
 
         salt = user['password_salt']
         s = itsdangerous.TimestampSigner(salt)
         try:
             s.unsign(token)
-            await self.send({
-                'op': OP.response,
-                'r': True,
-                'n': nonce,
-            })
-        except:
-            await self.send({
-                'op': OP.response,
-                'r': False,
-                'n': nonce,
-            })
+            return True
+        except itsdangerous.BadSignature:
+            return False, 'bad token'
 
     async def ws_init(self):
         hello = await self.recv()
