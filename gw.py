@@ -4,12 +4,13 @@ import asyncio
 import os
 import hashlib
 import random
-import asyncpg
+import base64
 
+import itsdangerous
+import asyncpg
 import websockets
 
 import lconfig
-
 import utils.snowflake as snowflake
 import utils.password as password
 
@@ -31,8 +32,8 @@ def random_nonce():
 
 
 class Connection:
-    def __init__(self, parent):
-        self.parent = parent
+    def __init__(self, bridge):
+        self.br = bridge
         self.ws = None
         self.good_state = False
         self._hb_good = True
@@ -83,13 +84,12 @@ class Connection:
                 payload = await self.recv()
                 opcode = payload['op']
 
+                log.info('Handling OP %d', opcode)
                 if opcode == OP.heartbeat_ack:
                     log.debug("Gateway ACK'd our heartbeat")
                     self._hb_good = True
-                elif opcode == OP.response:
-                    pass
                 else:
-                    log.warning('Unknown OP code %d', opcode)
+                    await self.dispatch(opcode, payload)
         except websockets.ConnectionClosed as err:
             log.info('Closed, trying a reconnect...')
             # self.loop_task.stop()
@@ -100,6 +100,58 @@ class Connection:
             return
         except:
             log.exception('Error in main receive loop')
+
+    async def dispatch(self, opcode, payload):
+        if opcode == OP.request:
+            # Server requested something from us
+            # for now, just the TOKEN_VALIDATE handler
+            rtype = payload['w']
+            rargs = payload['a']
+            nonce = payload['n']
+            handler = getattr(self, f'req_{rtype.lower()}', None)
+            if handler:
+                await handler(nonce, *rargs)
+            else:
+                log.warning('Unknown request: %s', rtype)
+
+        elif opcode == OP.dispatch:
+            # Server requested something from us
+            pass
+        elif opcode == OP.response:
+            # We requested something, server's
+            # responding
+            pass
+        else:
+            log.warning('Unknown OP code: %d', opcode)
+
+    async def req_token_validate(self, nonce, token):
+        encoded_uid, _, _ = token.split()
+
+        uid = base64.urlsafe_b64decode(encoded_uid)
+
+        user = await self.br.get_user(uid)
+        if not user:
+            return await self.send({
+                'op': OP.response,
+                'r': False,
+                'n': nonce,
+            })
+
+        salt = user['password_salt']
+        s = itsdangerous.TimestampSigner(salt)
+        try:
+            s.unsign(token)
+            await self.send({
+                'op': OP.response,
+                'r': True,
+                'n': nonce,
+            })
+        except:
+            await self.send({
+                'op': OP.response,
+                'r': False,
+                'n': nonce,
+            })
 
     async def ws_init(self):
         hello = await self.recv()
@@ -113,8 +165,8 @@ class Connection:
         })
 
         log.info('firing tasks')
-        self.loop_task = self.parent.loop.create_task(self.loop())
-        self.hb_task = self.parent.loop.create_task(self.heartbeat(hello))
+        self.loop_task = self.br.loop.create_task(self.loop())
+        self.hb_task = self.br.loop.create_task(self.heartbeat(hello))
 
     async def init(self):
         try:
