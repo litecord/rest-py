@@ -104,7 +104,6 @@ class Connection:
     async def dispatch(self, opcode, payload):
         if opcode == OP.request:
             # Server requested something from us
-            # for now, just the TOKEN_VALIDATE handler
             rtype = payload['w']
             rargs = payload['a']
             nonce = payload['n']
@@ -130,20 +129,11 @@ class Connection:
             log.warning('Unknown OP code: %d', opcode)
 
     async def req_token_validate(self, nonce, token):
-        encoded_uid, _, _ = token.split()
-        uid = base64.urlsafe_b64decode(encoded_uid)
-
-        user = await self.br.get_user(uid)
-        if not user:
-            return False, 'user not found'
-
-        salt = user['password_salt']
-        s = itsdangerous.TimestampSigner(salt)
-        try:
-            s.unsign(token)
+        status, err = self.br.token_valid(token)
+        if status:
             return True
-        except itsdangerous.BadSignature:
-            return False, 'bad token'
+        else:
+            return False, err
 
     async def ws_init(self):
         hello = await self.recv()
@@ -202,22 +192,41 @@ class Bridge:
         self.loop.create_task(self.ws.init())
         log.info('Finished.')
 
+    async def token_valid(self, token):
+        encoded_uid, _, _ = token.split('.')
+        uid = base64.urlsafe_b64decode(encoded_uid).decode('utf-8')
+
+        log.debug('uid: %r', uid)
+
+        user = await self.get_user(uid)
+        if not user:
+            return False, 'user not found'
+
+        salt = user['password_salt']
+        s = itsdangerous.TimestampSigner(salt)
+        try:
+            s.unsign(token)
+            return True, uid
+        except itsdangerous.BadSignature:
+            return False, 'bad token'
+
     async def get_user(self, user_id):
         user = await self.pool.fetchrow("""
         SELECT * FROM users
         WHERE id=$1
         """, user_id)
 
+        log.info('[user:by_id] %s -> %r', user_id, user)
         return user
 
     async def get_user_by_email(self, email: str) -> dict:
-        stmt = await self.pool.fetchrow("""
+        user = await self.pool.fetchrow("""
         SELECT * FROM users
         WHERE email=$1
         """, email)
 
-        log.info('[user:by_email] %s -> %r', email, stmt)
-        return stmt
+        log.info('[user:by_email] %s -> %r', email, user)
+        return user
 
     async def generate_discrim(self, username: str) -> str:
         """Generate a discriminator based on a username."""

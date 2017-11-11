@@ -7,7 +7,7 @@ from sanic import Blueprint
 # import gw
 # will enable us to communicate with gateway
 
-from .helpers import auth_route
+from .helpers import auth_route, user_to_json
 
 
 bp = Blueprint(__name__)
@@ -21,7 +21,7 @@ bp = Blueprint(__name__)
 @bp.route('/api/users/@me')
 @auth_route
 async def get_me(user, br, request):
-    return response.json(user.json)
+    return response.json(user_to_json(user))
 
 
 @bp.route('/api/users/<user_id:int>')

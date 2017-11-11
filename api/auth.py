@@ -52,6 +52,7 @@ async def add_user(br, request):
 async def login(br, request):
     payload = login_schema(request.json)
 
+    log.info('Trying to authenticate %r', payload['email'])
     user = await br.get_user_by_email(payload['email'])
     if not user:
         raise Exception('User not found')
