@@ -36,7 +36,9 @@ class Connection:
         self.br = bridge
         self.ws = None
         self.good_state = False
+
         self._hb_good = True
+        self._hb_seq = 0
 
         self.loop_task = None
         self.hb_task = None
@@ -67,7 +69,8 @@ class Connection:
 
                 log.debug('Heartbeating with the gateway')
                 await self.send({
-                    'op': OP.heartbeat
+                    'op': OP.heartbeat,
+                    's': self._hb_seq,
                 })
                 self._hb_good = False
 
@@ -88,6 +91,7 @@ class Connection:
                 if opcode == OP.heartbeat_ack:
                     log.debug("Gateway ACK'd our heartbeat")
                     self._hb_good = True
+                    self._hb_seq += 1
                 else:
                     await self.dispatch(opcode, payload)
         except websockets.ConnectionClosed as err:
