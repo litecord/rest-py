@@ -78,7 +78,6 @@ class Connection:
         except asyncio.CancelledError:
             log.exception('Cancelled')
             self.good_state = False
-            pass
 
     async def loop(self):
         """Enter an infinite loop receiving packets."""
@@ -94,7 +93,7 @@ class Connection:
                     self._hb_seq += 1
                 else:
                     await self.dispatch(opcode, payload)
-        except websockets.ConnectionClosed as err:
+        except websockets.ConnectionClosed:
             log.info('Closed, trying a reconnect...')
             # self.loop_task.stop()
             await self.ws.close()
@@ -102,10 +101,13 @@ class Connection:
 
             log.info('Finished')
             return
-        except:
+        except Exception:
             log.exception('Error in main receive loop')
 
-    async def dispatch(self, opcode, payload):
+    async def dispatch(self, opcode: int, payload: dict):
+        """
+        Handle a packet sent by the client.
+        """
         if opcode == OP.request:
             # Server requested something from us
             rtype = payload['w']
@@ -132,14 +134,17 @@ class Connection:
         else:
             log.warning('Unknown OP code: %d', opcode)
 
-    async def req_token_validate(self, nonce, token):
-        status, err = self.br.token_valid(token)
+    async def req_token_validate(self, nonce: int, token: str):
+        """Token validation handler."""
+        status, err = await self.br.token_valid(token)
         if status:
             return True
-        else:
-            return False, err
+        return False, err
 
     async def ws_init(self):
+        """Initialize the websocket
+        connection with the litebridge server
+        """
         hello = await self.recv()
         if hello['op'] != OP.hello:
             raise RuntimeError('Received HELLO is not HELLO')
@@ -165,7 +170,7 @@ class Connection:
             log.info('Connecting to the gateway [try: %d]...', self._retries)
             self.ws = await websockets.connect(lconfig.litebridge_server)
             await self.ws_init()
-        except:
+        except Exception:
             sec = random.uniform(1, 10)
             log.exception('Error while connecting, retrying in %.2f seconds',
                           sec)
