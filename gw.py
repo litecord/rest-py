@@ -62,7 +62,7 @@ class Connection:
                     # Clean everything and restart:
                     # better try to restart
                     # then see everything crash on fire
-                    self.loop_task.stop()
+                    self.loop_task.close()
                     await self.ws.close()
                     await self.init()
                     return
