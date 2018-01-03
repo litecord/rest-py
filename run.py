@@ -25,10 +25,12 @@ API_PREFIXES = [
 
 @app.route('/')
 async def index(request):
+    """Give index page"""
     return response.text('Welcome to litecord!')
 
 
 def main():
+    """Main entrypoint"""
     for uri in list(app.router.routes_all.keys()):
         if not uri.startswith('/api'):
             continue
@@ -42,11 +44,11 @@ def main():
 
     server = app.create_server(host="0.0.0.0", port=8000)
     loop = asyncio.get_event_loop()
-    b = Bridge(app, server, loop)
+    bridge = Bridge(app, server, loop)
     try:
-        asyncio.ensure_future(b.init())
+        asyncio.ensure_future(bridge.init())
         loop.run_forever()
-    except:
+    except Exception:
         loop.stop()
 
 if __name__ == '__main__':
