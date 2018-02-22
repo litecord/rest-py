@@ -19,3 +19,8 @@ pgargs = {
     'password': '123',
     'database': 'litecord',
 }
+
+# recommended amount is 1000 guilds for each shard
+# changing this can lead to overall service degradation
+# on high loads
+GUILDS_SHARD = 1000

@@ -18,6 +18,7 @@ log = logging.getLogger(__name__)
 
 
 class OP:
+    """Litebridge OP codes."""
     hello = 0
     hello_ack = 1
     heartbeat = 2
@@ -27,11 +28,13 @@ class OP:
     dispatch = 6
 
 
-def random_nonce():
+def random_nonce() -> str:
+    """Generate a random nonce for requests."""
     return hashlib.md5(os.urandom(128)).hexdigest()
 
 
 class Connection:
+    """Litebridge connection class."""
     def __init__(self, bridge):
         self.br = bridge
         self.ws = None
@@ -45,12 +48,15 @@ class Connection:
         self._retries = 0
 
     async def recv(self):
+        """Receive one message from the websocket."""
         return json.loads(await self.ws.recv())
 
     async def send(self, obj):
+        """Send a message to the websocket."""
         await self.ws.send(json.dumps(obj))
 
-    async def heartbeat(self, hello):
+    async def heartbeat(self, hello: dict):
+        """Heartbeat with the server."""
         try:
             period = hello['hb_interval'] / 1000
             log.info('hb: %.2f', period)
@@ -105,8 +111,7 @@ class Connection:
             log.exception('Error in main receive loop')
 
     async def dispatch(self, opcode: int, payload: dict):
-        """
-        Handle a packet sent by the client.
+        """Handle a packet sent by the client.
         """
         if opcode == OP.request:
             # Server requested something from us
@@ -219,7 +224,7 @@ class Bridge:
         except itsdangerous.BadSignature:
             return False, 'bad token'
 
-    async def get_user(self, user_id):
+    async def get_user(self, user_id) -> asyncpg.Record:
         user = await self.pool.fetchrow("""
         SELECT * FROM users
         WHERE id=$1
@@ -252,7 +257,7 @@ class Bridge:
 
         # Check if random discrim is already used
         # and if it is already used, generate another one
-        # TODO: use SQL for this
+        # TODO: use SQL for this ??
         rdiscrim = await password.random_digits(4)
 
         while rdiscrim in discrims:
@@ -263,7 +268,8 @@ class Bridge:
 
         return rdiscrim
 
-    async def create_user(self, payload):
+    async def create_user(self, payload: dict):
+        """Create one user, given a user payload."""
         # create a snowflake
         user_id = snowflake.get_snowflake()
         log.info('Generated snowflake %d', user_id)

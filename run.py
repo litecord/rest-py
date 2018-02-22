@@ -31,6 +31,9 @@ async def index(request):
 
 def main():
     """Main entrypoint"""
+
+    # this is a hack to make /api, /api/v6 and /api/v7
+    # route to the same shit
     for uri in list(app.router.routes_all.keys()):
         if not uri.startswith('/api'):
             continue

@@ -29,6 +29,7 @@ login_schema = Schema({
 @bp.route('/api/auth/users/add', methods=['POST'])
 @route
 async def add_user(br, request):
+    """Create one user on the service."""
     payload = useradd_schema(request.json)
     user = await br.get_user_by_email(payload['email'])
     if user:
@@ -40,16 +41,20 @@ async def add_user(br, request):
             'code': 1,
             'message': 'success',
         })
-    else:
-        return response.json({
-            'code': 0,
-            'message': 'no rows were affected',
-        })
+
+    return response.json({
+        'code': 0,
+        'message': 'no rows were affected',
+    })
 
 
 @bp.route('/api/auth/login', methods=['POST'])
 @route
 async def login(br, request):
+    """Login one user into the service.
+
+    Returns a valid token tied to that user.
+    """
     payload = login_schema(request.json)
 
     log.info('Trying to authenticate %r', payload['email'])
