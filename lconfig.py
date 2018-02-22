@@ -10,7 +10,7 @@ ssl_keyfile = ''
 gateway_url = 'ws://localhost:8081/gw'
 
 # Where the litebridge connection will happen
-litebridge_server = 'ws://localhost:8081/bridge'
+litebridge_server = 'ws://localhost:10101/'
 litebridge_password = '123'
 
 # Postgres arguments
