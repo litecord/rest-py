@@ -6,31 +6,21 @@ import itsdangerous
 from sanic import response
 from sanic import Blueprint
 
-from voluptuous import Schema, REMOVE_EXTRA
-
-from .helpers import route
 import utils.password as password
+from .schemas import USERADD_SCHEMA, LOGIN_SCHEMA
+from .helpers import route, validate
 
 bp = Blueprint(__name__)
 log = logging.getLogger(__name__)
-
-useradd_schema = Schema({
-    'email': str,
-    'password': str,
-    'username': str,
-}, extra=REMOVE_EXTRA)
-
-login_schema = Schema({
-    'email': str,
-    'password': str,
-}, extra=REMOVE_EXTRA)
 
 
 @bp.route('/api/auth/users/add', methods=['POST'])
 @route
 async def add_user(br, request):
     """Create one user on the service."""
-    payload = useradd_schema(request.json)
+    validate(request.json, USERADD_SCHEMA)
+    payload = request.json
+
     user = await br.get_user_by_email(payload['email'])
     if user:
         raise Exception('User already created')
@@ -55,7 +45,8 @@ async def login(br, request):
 
     Returns a valid token tied to that user.
     """
-    payload = login_schema(request.json)
+    validate(request.json, LOGIN_SCHEMA)
+    payload = request.json
 
     log.info('Trying to authenticate %r', payload['email'])
     user = await br.get_user_by_email(payload['email'])

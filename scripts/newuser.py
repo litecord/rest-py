@@ -7,9 +7,13 @@ API_BASE = 'http://localhost:8000'
 
 
 def main(args):
-    email = args[1]
-    password = args[2]
-    username = args[3]
+    try:
+        email = args[1]
+        password = args[2]
+        username = args[3]
+    except IndexError:
+        print('usage: ./newuser.py <email> <password> <username>')
+        return 1
 
     r = requests.post(f'{API_BASE}/api/auth/users/add', json={
         'email': email,

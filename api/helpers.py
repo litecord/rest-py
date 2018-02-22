@@ -3,7 +3,16 @@ import logging
 from sanic import response
 from sanic.exceptions import ServerError
 
+from .schemas import v
+from .errors import LitecordValidationError
+
 log = logging.getLogger(__name__)
+
+
+def validate(document: dict, schema: dict):
+    res = v.validate(document, schema)
+    if not res:
+        raise LitecordValidationError('Bad payload', v.errors)
 
 
 def get_token(request) -> str:

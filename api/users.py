@@ -1,43 +1,35 @@
 from sanic import response
 from sanic import Blueprint
 
-# import db
-# will give stuff like get_user and get_guild
-
-# import gw
-# will enable us to communicate with gateway
-
 from .helpers import auth_route, user_to_json
+from .errors import ApiError, Unauthorized, UnknownUser
 
 
 bp = Blueprint(__name__)
 
 
-# auth_route decorator
-#  Will check Authorization header
-#  Will also give the request handler
-#   a User object and a Bridge object
-
 @bp.route('/api/users/@me')
 @auth_route
 async def get_me(user, br, request):
+    """Get the current user."""
     return response.json(user_to_json(user))
 
 
 @bp.route('/api/users/<user_id:int>')
 @auth_route
 async def get_user(user, br, request, user_id):
+    """Get any user."""
     if user.bot:
-        return response.text('Unauthorized', status=401)
+        raise Unauthorized('Users can not use this endpoint')
 
     other = await br.get_user(user_id)
     if not other:
-        return response.text('User not found', status=404)
+        raise UnknownUser('User not found')
 
     return response.json(other.json)
 
 
-@bp.route('/api/users/@me', methods=['POST'])
+@bp.patch('/api/users/@me')
 @auth_route
 async def patch_me(user, br, request):
     pass
@@ -61,6 +53,6 @@ async def leave_guild(user, br, request, guild_id):
     try:
         await br.pop_member(guild, user)
     except br.MemberError as err:
-        return response.text(f'Error removing: {err!r}', status=500)
+        raise ApiError(f'error removing user: {err!r}')
 
     return response.text('', status=204)
