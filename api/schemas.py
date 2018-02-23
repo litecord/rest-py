@@ -29,3 +29,13 @@ LOGIN_SCHEMA = {
     'password': {'type': 'string'},
 }
 
+USERMOD_SCHEMA = {
+    # TODO: discriminator
+    'username': {'type': 'string', 'nullable': True},
+    'avatar': {'type': 'string', 'nullable': True},
+
+    # to change your email, you need your password.
+    'email': {'type': 'email', 'depedencies': 'password'},
+    'password': {'type': 'string'}
+}
+

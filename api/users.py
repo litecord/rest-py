@@ -1,8 +1,9 @@
 from sanic import response
 from sanic import Blueprint
 
-from .helpers import auth_route, user_to_json
+from .helpers import auth_route, user_to_json, validate
 from .errors import ApiError, Unauthorized, UnknownUser
+from .schemas import USERMOD_SCHEMA
 
 
 bp = Blueprint(__name__)
@@ -32,7 +33,40 @@ async def get_user(user, br, request, user_id):
 @bp.patch('/api/users/@me')
 @auth_route
 async def patch_me(user, br, request):
-    pass
+    """Modify current user."""
+    payload = validate(request.json, USERMOD_SCHEMA)
+    result_user = dict(user)
+
+    new_username = payload.get('username')
+    if new_username and new_username != user['username']:
+        # proceed for a new discrim
+        new_discrim = br.generate_discrim(new_username)
+
+        await br.pool.execute("""
+            update users
+            set discriminator=$1, username=$2
+            where id=$3
+        """, new_discrim, new_username, user['id'])
+
+        result_user['discriminator'] = new_discrim
+        result_user['username'] = new_username
+
+    new_avatar = payload.get('avatar')
+    if new_avatar:
+        await br.pool.execute("""
+            update users
+            set avatar=$1
+            where id=$2
+        """, new_avatar, user['id'])
+
+        result_user['avatar'] = new_avatar
+
+    new_email = payload.get('email')
+    if new_email and new_email != user['email']:
+        # TODO: check password
+        result_user['email'] = new_email
+
+    return user_to_json(user)
 
 
 @bp.route('/api/users/@me/guilds')

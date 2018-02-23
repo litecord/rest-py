@@ -14,6 +14,8 @@ def validate(document: dict, schema: dict):
     if not res:
         raise LitecordValidationError('Bad payload', v.errors)
 
+    return document
+
 
 def get_token(request) -> str:
     """Get a token from a request object."""
