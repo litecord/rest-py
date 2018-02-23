@@ -60,6 +60,9 @@ async def login(br, request):
     if not user:
         raise Exception('User not found')
 
+    salt = user['password_salt']
+    check_password(user, payload.get('password'))
+
     s = itsdangerous.TimestampSigner(salt)
     uid_encoded = base64.urlsafe_b64encode(user['id'].encode())
     token = s.sign(uid_encoded).decode()
