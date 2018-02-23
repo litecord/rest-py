@@ -9,9 +9,16 @@ from sanic import Blueprint
 import utils.password as password
 from .schemas import USERADD_SCHEMA, LOGIN_SCHEMA
 from .helpers import route, validate
+from .errors import Unauthorized
 
 bp = Blueprint(__name__)
 log = logging.getLogger(__name__)
+
+def check_password(user, given_password: str):
+    """Check if a password is correct."""
+    salt = user['password_salt']
+    if password.pwd_hash(given_password, salt) != user['password_hash']:
+        raise Unauthorized('Incorrect password')
 
 
 @bp.route('/api/auth/users/add', methods=['POST'])
@@ -52,10 +59,6 @@ async def login(br, request):
     user = await br.get_user_by_email(payload['email'])
     if not user:
         raise Exception('User not found')
-
-    salt = user['password_salt']
-    if password.pwd_hash(payload['password'], salt) != user['password_hash']:
-        raise Exception('Incorrect password')
 
     s = itsdangerous.TimestampSigner(salt)
     uid_encoded = base64.urlsafe_b64encode(user['id'].encode())

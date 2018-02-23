@@ -4,6 +4,7 @@ from sanic import Blueprint
 from .helpers import auth_route, user_to_json, validate
 from .errors import ApiError, Unauthorized, UnknownUser
 from .schemas import USERMOD_SCHEMA
+from .auth import check_password
 
 
 bp = Blueprint(__name__)
@@ -62,11 +63,15 @@ async def patch_me(user, br, request):
         result_user['avatar'] = new_avatar
 
     new_email = payload.get('email')
+    given_password = payload.get('password')
+
     if new_email and new_email != user['email']:
-        # TODO: check password
+        check_password(user, given_password)
         result_user['email'] = new_email
 
-    return user_to_json(user)
+    # TODO: new_password
+
+    return response.json(result_user)
 
 
 @bp.route('/api/users/@me/guilds')

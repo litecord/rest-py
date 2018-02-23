@@ -59,7 +59,8 @@ class Connection:
         """Heartbeat with the server."""
         try:
             period = hello['hb_interval'] / 1000
-            log.info('hb: %.2f', period)
+            period = round(period, 5)
+            log.info(f'Heartbeating period is {period} seconds')
             while True:
                 if not self._hb_good:
                     log.warning('We did not receive an ACK from the server.')
@@ -82,8 +83,11 @@ class Connection:
 
                 await asyncio.sleep(period)
         except asyncio.CancelledError:
-            log.exception('Cancelled')
-            self.good_state = False
+            log.warning('Heartbeat task cancelled.')
+        except websockets.exceptions.ConnectionClosed as err:
+            log.error(f'Connection failed. {err!r}')
+
+        self.good_state = False
 
     async def loop(self):
         """Enter an infinite loop receiving packets."""
@@ -92,7 +96,7 @@ class Connection:
                 payload = await self.recv()
                 opcode = payload['op']
 
-                log.info('Handling OP %d', opcode)
+                log.debug('Handling OP %d', opcode)
                 if opcode == OP.heartbeat_ack:
                     log.debug("Gateway ACK'd our heartbeat")
                     self._hb_good = True
@@ -100,13 +104,10 @@ class Connection:
                 else:
                     await self.dispatch(opcode, payload)
         except websockets.ConnectionClosed:
-            log.info('Closed, trying a reconnect...')
-            # self.loop_task.stop()
+            log.info('Closed, trying to reconnect...')
+
             await self.ws.close()
             await self.init()
-
-            log.info('Finished')
-            return
         except Exception:
             log.exception('Error in main receive loop')
 
@@ -148,38 +149,47 @@ class Connection:
 
     async def ws_init(self):
         """Initialize the websocket
-        connection with the litebridge server
+        connection with the litebridge server.
         """
         hello = await self.recv()
         if hello['op'] != OP.hello:
             raise RuntimeError('Received HELLO is not HELLO')
 
-        log.info('Authenticating')
+        log.debug('Authenticating')
         await self.send({
             'op': OP.hello_ack,
             'password': lconfig.litebridge_password,
         })
 
-        log.info('firing tasks')
+        log.debug('firing tasks')
         self.loop_task = self.br.loop.create_task(self.loop())
         self.hb_task = self.br.loop.create_task(self.heartbeat(hello))
 
-    async def init(self):
-        try:
-            self._retries += 1
+    def cleanup(self):
+        """Destroy any websocket-processing tasks."""
+        if self.loop_task:
+            self.loop_task.cancel()
+            self.loop_task = None
 
-            if self._retries > 5:
-                log.warning('Retried a connection 5 times, too much.')
-                return
+        if self.hb_task:
+            self.hb_task.cancel()
+            self.hb_task = None
+
+    async def init(self):
+        """Connect to the bridge websocket and start
+        the processing tasks."""
+        try:
+            self.cleanup()
+            self._retries += 1
 
             log.info('Connecting to the gateway [try: %d]...', self._retries)
             self.ws = await websockets.connect(lconfig.litebridge_server)
             await self.ws_init()
-        except Exception:
-            sec = random.uniform(1, 10)
-            log.exception('Error while connecting, retrying in %.2f seconds',
-                          sec)
-            await asyncio.sleep(sec)
+        except Exception as err:
+            retry = random.uniform(1, 8)
+            log.error('Error while connecting, retrying in'
+                      f' {retry:.2} seconds: {err!r}')
+            await asyncio.sleep(retry)
 
             # recursion am i right
             await self.init()
@@ -187,26 +197,27 @@ class Connection:
 
 class Bridge:
     def __init__(self, app, server, loop):
+        self.server = server
+        self.loop = loop
+
         self.ws = None
+        self.pool = None
         self.app = app
 
         # aliases to this instance
         app.bridge = self
         app.br = self
 
-        self.server = server
-        self.loop = loop
-
     async def init(self):
-        log.info('Starting rest-py')
-        self.ws = Connection(self)
+        """Connect to database and instantiate a websocket connection."""
         self.pool = await asyncpg.create_pool(**lconfig.pgargs)
+        self.ws = Connection(self)
 
         self.loop.create_task(self.server)
         self.loop.create_task(self.ws.init())
-        log.info('Finished.')
 
-    async def token_valid(self, token):
+    async def token_valid(self, token: str) -> tuple:
+        """Check if a token is valid."""
         encoded_uid, _, _ = token.split('.')
         uid = base64.urlsafe_b64decode(encoded_uid).decode('utf-8')
 
@@ -217,14 +228,15 @@ class Bridge:
             return False, 'user not found'
 
         salt = user['password_salt']
-        s = itsdangerous.TimestampSigner(salt)
+        signer = itsdangerous.TimestampSigner(salt)
         try:
-            s.unsign(token)
+            signer.unsign(token)
             return True, uid
         except itsdangerous.BadSignature:
             return False, 'bad token'
 
     async def get_user(self, user_id) -> asyncpg.Record:
+        """Get one user in the service."""
         user = await self.pool.fetchrow("""
         SELECT * FROM users
         WHERE id=$1
@@ -234,6 +246,7 @@ class Bridge:
         return user
 
     async def get_user_by_email(self, email: str) -> dict:
+        """Get one user by its email in the service."""
         user = await self.pool.fetchrow("""
         SELECT * FROM users
         WHERE email=$1
@@ -287,7 +300,7 @@ class Bridge:
 
         VALUES ($1, $2, $3, $4, $5, $6)
         """, str(user_id), payload['username'], discrim,
-                                     payload['email'], salt, pwd_hash)
+                                      payload['email'], salt, pwd_hash)
 
         _, _, rows = res.split()
         return int(rows)

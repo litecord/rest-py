@@ -1,3 +1,6 @@
+"""Common litecord errors.
+"""
+
 class ApiError(Exception):
     """An API general error."""
     api_errcode = 50000
@@ -15,5 +18,7 @@ class UnknownUser(ApiError):
     api_errcode = 10013
     status_code = 404
 
+
 class LitecordValidationError(ApiError):
+    """A validation issue with user data."""
     status_code = 400
