@@ -1,4 +1,5 @@
 import logging
+import collections
 import json
 import asyncio
 import os
@@ -46,6 +47,7 @@ class Connection:
         self.loop_task = None
         self.hb_task = None
         self._retries = 0
+        self._requests = collections.defaultdict(asyncio.Event)
 
     async def recv(self):
         """Receive one message from the websocket."""
@@ -102,7 +104,7 @@ class Connection:
                     self._hb_good = True
                     self._hb_seq += 1
                 else:
-                    await self.dispatch(opcode, payload)
+                    await self.dispatch_packet(opcode, payload)
         except websockets.ConnectionClosed:
             log.info('Closed, trying to reconnect...')
 
@@ -111,7 +113,7 @@ class Connection:
         except Exception:
             log.exception('Error in main receive loop')
 
-    async def dispatch(self, opcode: int, payload: dict):
+    async def dispatch_packet(self, opcode: int, payload: dict):
         """Handle a packet sent by the client.
         """
         if opcode == OP.request:
@@ -131,7 +133,7 @@ class Connection:
                 log.warning('Unknown request: %s', rtype)
 
         elif opcode == OP.dispatch:
-            # Server requested something from us
+            # Server requested something from us (a dispatch)
             pass
         elif opcode == OP.response:
             # We requested something, server's
@@ -146,6 +148,28 @@ class Connection:
         if status:
             return True
         return False, err
+
+    async def dispatch(self, name: str, args):
+        """Dispatch something to the server.
+
+        We will not get any response back.
+        """
+        await self.send({
+            'op': OP.dispatch,
+            'w': name,
+            'a': args,
+        })
+
+    async def request(self, name, args, **kwargs):
+        """Request something from the server.
+
+        This will block the calling coroutine until
+        a response is given.
+
+        Optionally, you can add a timeout as a keyword argument.
+        """
+        # TODO: implementation
+        pass
 
     async def ws_init(self):
         """Initialize the websocket
@@ -206,7 +230,6 @@ class Bridge:
 
         # aliases to this instance
         app.bridge = self
-        app.br = self
 
     async def init(self):
         """Connect to database and instantiate a websocket connection."""

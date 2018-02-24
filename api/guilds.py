@@ -20,7 +20,7 @@ async def get_guild(user, bridge, request, guild_id):
 
 @bp.route('/api/guilds', methods=['POST'])
 @auth_route
-async def create_guild(user, br, request):
+async def create_guild(user, bridge, request):
     """Create guild"""
     payload = validate(request.json, GUILDADD_SCHEMA)
     payload['region'] = 'local'
@@ -40,7 +40,7 @@ async def create_guild(user, br, request):
     }
 
     # create a guild
-    await br.pool.execute("""
+    await bridge.pool.execute("""
         insert into guilds (id, name, icon, owner_id, region)
         values ($1, $2, $3, $4, $5)
     """, raw_guild['id'], raw_guild['name'],
@@ -48,7 +48,7 @@ async def create_guild(user, br, request):
                           user['id'], raw_guild['region'])
 
     # add the owner as a member of the guild
-    await br.pool.execute("""
+    await bridge.pool.execute("""
         insert into members (user_id, guild_id)
         values ($1, $2)
     """, user['id'], raw_guild['id'])
@@ -56,5 +56,7 @@ async def create_guild(user, br, request):
     # TODO: maybe communicate gateway of a guild creation
     # and then dispatch GUILD_CREATE ?
     # like calling bridge.dispatch, or something.
+    await bridge.ws.dispatch('NEW_GUILD',
+                             [raw_guild['id'], user['id']])
 
     return response.json(raw_guild)

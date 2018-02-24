@@ -9,7 +9,28 @@ from .errors import LitecordValidationError
 log = logging.getLogger(__name__)
 
 
-def validate(document: dict, schema: dict):
+def validate(document: dict, schema: dict) -> dict:
+    """Validate one document against the schema provided.
+
+    Parameters
+    ----------
+    document: dict
+        The original document to be validated.
+    schema: dict
+        The schema that this document will be validated against.
+
+    Returns
+    -------
+    dict
+        The original document.
+
+        Might be a normalized version of it in later iterations.
+
+    Raises
+    ------
+    LitecordValidationError
+        On any payload error.
+    """
     res = v.validate(document, schema)
     if not res:
         raise LitecordValidationError('Bad payload', v.errors)
@@ -45,8 +66,8 @@ async def authorize(request):
 
 def route(handler):
     async def new_handler(request, *args, **kwargs):
-        br = request.app.bridge
-        return await handler(br, request, *args, **kwargs)
+        bridge = request.app.bridge
+        return await handler(bridge, request, *args, **kwargs)
 
     return new_handler
 
@@ -54,7 +75,8 @@ def route(handler):
 def auth_route(handler):
     """Generate an authentication-only route."""
     async def new_handler(request, *args, **kwargs):
-        br = request.app.bridge
+        """Request handler."""
+        bridge = request.app.bridge
         token = get_token(request)
         log.info('token: %s', token)
 
@@ -64,31 +86,32 @@ def auth_route(handler):
                 'message': '401: Unauthorized'
             }, status=401)
 
-        ok, user_id = await br.token_valid(token)
-        if not ok:
+        succ, user_id = await bridge.token_valid(token)
+        if not succ:
             return response.json({
                 'code': 0,
                 'message': 'User not found [id]'
             }, status=401)
 
-        user = await br.get_user(user_id)
+        user = await bridge.get_user(user_id)
         if not user:
             return response.json({
                 'code': 0,
                 'message': 'User not found [user]'
             }, status=401)
 
-        return await handler(user, br, request, *args, **kwargs)
+        return await handler(user, bridge, request, *args, **kwargs)
 
     return new_handler
 
 
 def to_json(record, fields) -> dict:
-    d = {}
+    """Convert a record with its fields to a dictionary."""
+    dct = {}
     for field in fields:
-        d[field] = record[field]
+        dct[field] = record[field]
 
-    return d
+    return dct
 
 
 def user_to_json(record) -> dict:
