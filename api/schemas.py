@@ -16,6 +16,18 @@ class LitecordValidator(Validator):
         if re.match(EMAIL_REGEX, value):
             return True
 
+    def _validate_type_verification_level(self, value) -> bool:
+        return int(value) in (0, 1, 2, 3, 4)
+
+    def _validate_type_msg_notifications(self, value) -> bool:
+        return int(value) in (0, 1)
+
+    def _validate_type_explicit_content(self, value) -> bool:
+        return int(value) in (0, 1, 2)
+
+    def _validate_type_image(self, value) -> bool:
+        return True
+
 v = LitecordValidator()
 
 USERADD_SCHEMA = {
@@ -39,3 +51,17 @@ USERMOD_SCHEMA = {
     'password': {'type': 'string'}
 }
 
+GUILDADD_SCHEMA = {
+    'name': {'type': 'string', 'minlength': 2, 'maxlength': 100},
+    'region': {'type': 'voice_region'},
+
+    'icon': {'type': 'image', 'nullable': True},
+    'verification_level': {'type': 'verification_level', 'nullable': True},
+    'default_message_notifications': {
+        'type': 'msg_notifications',
+        'nullable': True
+    },
+    'explicit_content_filter': {'type': 'explicit_content', 'nullable': True},
+
+    # TODO: roles, channels
+}
