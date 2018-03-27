@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.6
 
 """
 pw2tkn.py - get your Litecord token using email/password authentication.
