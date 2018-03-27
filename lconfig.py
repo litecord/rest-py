@@ -18,6 +18,7 @@ pgargs = {
     'user': 'litecord',
     'password': '123',
     'database': 'litecord',
+    'host': 'localhost',
 }
 
 # recommended amount is 1000 guilds for each shard
